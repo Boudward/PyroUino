@@ -1,4 +1,3 @@
-
 byte inByte;
 
 void setup()
