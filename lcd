@@ -1,44 +1,86 @@
-//https://arduino-info.wikispaces.com/LCD-Blue-I2C
+// tuto affichage lcd i2c : https://arduino-info.wikispaces.com/LCD-Blue-I2C 
+// tuto registre a décalage : http://eskimon.fr/269-arduino-annexe-1-ajouter-des-sorties-a-arduino-74hc595
 
-#include <Wire.h>  // Comes with Arduino IDE
+
+#include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 
 //Variables
-String mess_recu = "";
+
+#define nombre_de_74hc595 1 // Nombre de 74HC595 en série
+#define nombreDeSorties nombre_de_74hc595 * 8 // Nombre de pins
+boolean registre[nombreDeSorties];
+#define verrouPin 11   // Broche connectée au ST_CP du 74HC595
+#define horlogePin 12   // Broche connectée au SH_CP du 74HC595
+#define dataPin 10   // Broche connectée au DS du 74HC595
 
 LiquidCrystal_I2C lcd(0x27, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE);  // Défini l'adresse de l'écran
 
 void setup()
 {
   Serial.begin(9600);  // Ouverture voie série
+  pinMode(verrouPin, OUTPUT);
+  pinMode(horlogePin, OUTPUT);
+  pinMode(dataPin, OUTPUT);
+
 
   lcd.begin(16, 2);  // initialisation de l'écran pour 16 charactères sur 2 lignes, avec rétro-éclairage
 
-
   // setCursor(COLONNE, LIGNE) ==> (0,0)= en haut à gauche et (15,1)= en bas à droite
-
   lcd.setCursor(3, 0);
   lcd.print("Bienvenue!");
-  delay(5000);
-  lcd.setCursor(0, 0);
-  lcd.print("Saisir données");
-
+  delay(2000);
+  lcd.clear();
+  raz_registre(); //met le registre de sortie à zéro
 }
-
 
 void loop()
-
 {
-
   if (Serial.available()) {             // si des bits arrivent sur le port série
+    lcd.clear();                        // effacer écran
     delay(100);                         // tempo pour permettre à tous les bits d'arriver
-    lcd.clear();                        //effacer écran
+    long nbrTransmis = 0;                // chaine de charactère transmise
     while (Serial.available() > 0) {    // tant qu'il y a des données à lire
-      lcd.write(Serial.read());         //affiche le bit recu  à la suite des autres      
+      int chiffreLu = Serial.read();        //on lit le caractère
+      if (chiffreLu >= '0' && chiffreLu <= '9') { //vérifie que la valeur envoyé est bien un nombre compris entre à et 9
+        chiffreLu = chiffreLu - '0';            // on déduit le nombre ascii de O
+        nbrTransmis = nbrTransmis*10 + chiffreLu;       //on ajoute le chiffre transmis au nombre
+        Serial.println(chiffreLu);          // on renvoi le chiffre reçu
+      }
     }
-
-  }
-  else {
-    mess_recu = "";
+    Serial.println(nbrTransmis);        // on renvoi le nombre reçu
+    lcd.setCursor(0, 1);                // on se posisitionne à la ligne du bas
+    lcd.print(nbrTransmis);             // on affiche le nombre transmis
+    // !!! rien se s'affiche car lcd.print affiche une chaine de caractere et pas un nombre.Il faut convertir le nombre en chaine.
+    if (nbrTransmis <= nombreDeSorties) {
+      registre[nbrTransmis] = !registre[nbrTransmis];
+    }
+    for (int x = nombreDeSorties - 1; x >=  0; x--) {
+      Serial.print(registre[x]);
+    }
+    Serial.println("");
+    Serial.println("------");
+    ecrire_registre();
   }
 }
+
+void raz_registre() { //met le registre de sortie à zéro
+  for (int i = nombreDeSorties - 1; i >=  0; i--) {
+    registre[i] = LOW;
+  }
+}
+
+
+void ecrire_registre() { //Enregistrer et afficher les valeurs dans le registre
+  digitalWrite(verrouPin, LOW); // désactive les sorties
+  for (int i = nombreDeSorties - 1; i >=  0; i--) { // transmet l'état de l'ensemle des rangs du tableau "registre" puis décale le registre du CI
+    digitalWrite(horlogePin, LOW);
+    int val = registre[i];
+    digitalWrite(dataPin, val); //transmet l'état du rang i du tableau "registre"
+    digitalWrite(horlogePin, HIGH);// décale
+  }
+  digitalWrite(verrouPin, HIGH); // on affiche
+}
+
+
+
