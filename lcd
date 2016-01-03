@@ -3,22 +3,25 @@
 #include <Wire.h>  // Comes with Arduino IDE
 #include <LiquidCrystal_I2C.h>
 
-LiquidCrystal_I2C lcd(0x27, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE);  // Set the LCD I2C address
+//Variables
+String mess_recu = "";
+
+LiquidCrystal_I2C lcd(0x27, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE);  // Défini l'adresse de l'écran
 
 void setup()
 {
   Serial.begin(9600);  // Ouverture voie série
 
-  lcd.begin(16,2);   // initialisation de l'écran pour 16 charactères sur 2 lignes, avec rétro-éclairage
+  lcd.begin(16, 2);  // initialisation de l'écran pour 16 charactères sur 2 lignes, avec rétro-éclairage
 
 
-// setCursor(COLONNE, LIGNE) ==> (0,0)= en haut à gauche et (15,1)= en bas à droite  
+  // setCursor(COLONNE, LIGNE) ==> (0,0)= en haut à gauche et (15,1)= en bas à droite
 
-  lcd.setCursor(3,0); 
+  lcd.setCursor(3, 0);
   lcd.print("Bienvenue!");
   delay(5000);
-  lcd.setCursor(0,0); 
-  lcd.print("Mot de Passe :");
+  lcd.setCursor(0, 0);
+  lcd.print("Saisir données");
 
 }
 
@@ -26,18 +29,16 @@ void setup()
 void loop()
 
 {
-    // when characters arrive over the serial port...
-    if (Serial.available()) {
-      // tempo pour permettre à tous les bits d'arriver
-      delay(100);
-      lcd.clear(); //effacer écran
-      // tant qu'il y a des données à lire
-      while (Serial.available() > 0) {
-        // Afficher les données sur l'écran
-        lcd.write(Serial.read());
-      }
+
+  if (Serial.available()) {             // si des bits arrivent sur le port série
+    delay(100);                         // tempo pour permettre à tous les bits d'arriver
+    lcd.clear();                        //effacer écran
+    while (Serial.available() > 0) {    // tant qu'il y a des données à lire
+      lcd.write(Serial.read());         //affiche le bit recu  à la suite des autres      
     }
+
   }
-
-
-
+  else {
+    mess_recu = "";
+  }
+}
