@@ -1,18 +1,19 @@
-// tuto affichage lcd i2c : https://arduino-info.wikispaces.com/LCD-Blue-I2C 
+// tuto affichage lcd i2c : https://arduino-info.wikispaces.com/LCD-Blue-I2C
 // tuto registre a décalage : http://eskimon.fr/269-arduino-annexe-1-ajouter-des-sorties-a-arduino-74hc595
-
 
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 
 //Variables
 
-#define nombre_de_74hc595 1 // Nombre de 74HC595 en série
-#define nombreDeSorties nombre_de_74hc595 * 8 // Nombre de pins
-boolean registre[nombreDeSorties];
+#define nombre_de_74hc595 2 // Nombre de 74HC595 en série
+#define nombreDeSorties nombre_de_74hc595 * 8 // Nombre de pins33
 #define verrouPin 11   // Broche connectée au ST_CP du 74HC595
 #define horlogePin 12   // Broche connectée au SH_CP du 74HC595
 #define dataPin 10   // Broche connectée au DS du 74HC595
+#define DeltaT 500
+long TZero = 0;
+unsigned int registreBit = 0 << 15;
 
 LiquidCrystal_I2C lcd(0x27, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE);  // Défini l'adresse de l'écran
 
@@ -23,6 +24,8 @@ void setup()
   pinMode(horlogePin, OUTPUT);
   pinMode(dataPin, OUTPUT);
 
+  maJSorties();
+  // comment éviter d'avoir des leds allumés au démarrage, quand on branche sur l'USB ??
 
   lcd.begin(16, 2);  // initialisation de l'écran pour 16 charactères sur 2 lignes, avec rétro-éclairage
 
@@ -30,57 +33,46 @@ void setup()
   lcd.setCursor(3, 0);
   lcd.print("Bienvenue!");
   delay(2000);
-  lcd.clear();
-  raz_registre(); //met le registre de sortie à zéro
+  lcd.clear(); // effacer écran
+
 }
 
 void loop()
 {
   if (Serial.available()) {             // si des bits arrivent sur le port série
     lcd.clear();                        // effacer écran
-    delay(100);                         // tempo pour permettre à tous les bits d'arriver
     long nbrTransmis = 0;                // chaine de charactère transmise
     while (Serial.available() > 0) {    // tant qu'il y a des données à lire
       int chiffreLu = Serial.read();        //on lit le caractère
       if (chiffreLu >= '0' && chiffreLu <= '9') { //vérifie que la valeur envoyé est bien un nombre compris entre à et 9
         chiffreLu = chiffreLu - '0';            // on déduit le nombre ascii de O
-        nbrTransmis = nbrTransmis*10 + chiffreLu;       //on ajoute le chiffre transmis au nombre
-        Serial.println(chiffreLu);          // on renvoi le chiffre reçu
+        nbrTransmis = nbrTransmis * 10 + chiffreLu;     //on ajoute le chiffre transmis au nombre
+        //Serial.println(chiffreLu);          // on renvoi le chiffre reçu
       }
     }
-    Serial.println(nbrTransmis);        // on renvoi le nombre reçu
     lcd.setCursor(0, 1);                // on se posisitionne à la ligne du bas
     lcd.print(nbrTransmis);             // on affiche le nombre transmis
-    // !!! rien se s'affiche car lcd.print affiche une chaine de caractere et pas un nombre.Il faut convertir le nombre en chaine.
-    if (nbrTransmis <= nombreDeSorties) {
-      registre[nbrTransmis] = !registre[nbrTransmis];
+    nbrTransmis = nbrTransmis - 1;      // faire correspondre la led 1 à la position de registre O (les lignes vont de 1 à 16 et la regsitre de 0 à 15)
+    if (nbrTransmis <= (nombreDeSorties - 1) && nbrTransmis >= 0) { // si le nombre est compris entre 0 et 15
+      registreBit |= 1 << nbrTransmis;
+      TZero = millis();                 // on enrgistre à quel moment ça a été fait
     }
-    for (int x = nombreDeSorties - 1; x >=  0; x--) {
-      Serial.print(registre[x]);
-    }
-    Serial.println("");
-    Serial.println("------");
-    ecrire_registre();
+    maJSorties();
+  }
+  if (millis() > (TZero + DeltaT) && TZero > 0) { // si il s'est écoulé plus de "deltaT" milliseconds on remet toutes les sorties à zéro
+    registreBit = 0 ; 
+    lcd.clear();
+    TZero = 0; //permet à la boucle de ne plus s'exécuter tant qu'on ne déclenche plus de ligne
+    maJSorties();
   }
 }
 
-void raz_registre() { //met le registre de sortie à zéro
-  for (int i = nombreDeSorties - 1; i >=  0; i--) {
-    registre[i] = LOW;
-  }
-}
-
-
-void ecrire_registre() { //Enregistrer et afficher les valeurs dans le registre
+void maJSorties() { //met à jour les sorties selon l'état des bits du registreBit
   digitalWrite(verrouPin, LOW); // désactive les sorties
-  for (int i = nombreDeSorties - 1; i >=  0; i--) { // transmet l'état de l'ensemle des rangs du tableau "registre" puis décale le registre du CI
+  for (int i = nombreDeSorties - 1; i >=  0; i--) { // transmet l'état des bits du registreBit décale le registre du CI
     digitalWrite(horlogePin, LOW);
-    int val = registre[i];
-    digitalWrite(dataPin, val); //transmet l'état du rang i du tableau "registre"
+    digitalWrite(dataPin, ((registreBit >> i) & 1));    //transmet l'état du bit de rang i du registreBit
     digitalWrite(horlogePin, HIGH);// décale
   }
   digitalWrite(verrouPin, HIGH); // on affiche
 }
-
-
-
